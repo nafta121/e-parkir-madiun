@@ -1,0 +1,8 @@
+{
+  "name": "E-Parkir Madiun",
+  "description": "Mobile-first web application for parking retribution collection in Madiun City.",
+  "requestFramePermissions": [
+    "camera",
+    "geolocation"
+  ]
+}
