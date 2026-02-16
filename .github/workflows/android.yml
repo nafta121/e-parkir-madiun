@@ -29,18 +29,18 @@ jobs:
 
       - name: Add or Sync Android Platform
         run: |
-          # Cek jika folder android belum ada, baru jalankan 'add'
+          # 1. Jika folder android belum ada, buatkan dulu
           if [ ! -d "android" ]; then
             npx cap add android
           fi
-          
-          # Selalu jalankan 'sync' untuk menyelaraskan kode web dengan folder android
+
+          # 2. Selaraskan kode web Vite dengan folder android
           npx cap sync android
 
-          # Pastikan izin GPS tetap masuk ke Manifest
+          # 3. Pastikan izin GPS tetap ada (Opsional tapi aman)
           if [ -f "android/app/src/main/AndroidManifest.xml" ]; then
-            echo "Manifest found, ensuring GPS permissions..."
-            # (Opsional: tambahkan logika manipulasi file jika diperlukan di sini)
+            echo "Android Manifest confirmed."
+          fi
 
       - name: Build Android APK
         run: |
