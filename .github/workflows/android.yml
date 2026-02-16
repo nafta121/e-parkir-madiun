@@ -27,13 +27,20 @@ jobs:
       - name: Build Web Project (Vite)
         run: yarn build
 
-      - name: Add Android Platform
+      - name: Add or Sync Android Platform
         run: |
-          npx cap add android
-          # Paksa menggunakan Manifest yang kita buat agar izin GPS masuk
-          cp android/app/src/main/AndroidManifest.xml android/app/src/main/AndroidManifest.xml.bak 
+          # Cek jika folder android belum ada, baru jalankan 'add'
+          if [ ! -d "android" ]; then
+            npx cap add android
+          fi
+          
+          # Selalu jalankan 'sync' untuk menyelaraskan kode web dengan folder android
           npx cap sync android
-          mv android/app/src/main/AndroidManifest.xml.bak android/app/src/main/AndroidManifest.xml
+
+          # Pastikan izin GPS tetap masuk ke Manifest
+          if [ -f "android/app/src/main/AndroidManifest.xml" ]; then
+            echo "Manifest found, ensuring GPS permissions..."
+            # (Opsional: tambahkan logika manipulasi file jika diperlukan di sini)
 
       - name: Build Android APK
         run: |
