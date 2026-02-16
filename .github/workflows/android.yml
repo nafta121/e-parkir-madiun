@@ -29,12 +29,18 @@ jobs:
 
       - name: Add or Sync Android Platform
         run: |
-          # 1. Jika folder android belum ada, buatkan dulu
+          # Jika folder android ada tapi isinya tidak lengkap (tidak ada gradlew), hapus saja!
+          if [ -d "android" ] && [ ! -f "android/gradlew" ]; then
+            echo "Folder android ditemukan tapi tidak lengkap (gradlew hilang). Menghapus untuk build ulang..."
+            rm -rf android
+          fi
+
+          # Jika folder android tidak ada (setelah dihapus atau memang belum ada), buat baru
           if [ ! -d "android" ]; then
             npx cap add android
           fi
 
-          # 2. Selaraskan kode web Vite dengan folder android
+          # Selaraskan kode web Vite dengan folder android yang baru
           npx cap sync android
 
           # 3. Pastikan izin GPS tetap ada (Opsional tapi aman)
