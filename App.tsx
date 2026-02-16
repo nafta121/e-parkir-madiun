@@ -7,6 +7,7 @@ import { RegisterPage } from './pages/RegisterPage'; // Imported
 import { DashboardPage } from './pages/DashboardPage';
 import { AdminDashboard } from './pages/AdminDashboard';
 import { Loader2 } from 'lucide-react';
+import { Analytics } from '@vercel/analytics/react';
 
 // Wrapper to decide which dashboard to show based on Role
 const MainRouter: React.FC = () => {
@@ -40,6 +41,7 @@ const App: React.FC = () => {
           {/* Catch-all Redirect */}
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
+        <Analytics />
       </AuthProvider>
     </Router>
   );
