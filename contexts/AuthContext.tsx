@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useEffect, useState, useMemo, useCallback } from 'react';
 import { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../supabase';
@@ -35,31 +34,63 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // REFACTORED: Rely on onAuthStateChange as the single source of truth
-  // This prevents race conditions on app load/refresh.
+  // REFACTORED: Ambil sesi awal secara manual, lalu dengarkan perubahannya
   useEffect(() => {
-    setLoading(true);
+    let isMounted = true;
 
+    const initializeAuth = async () => {
+      try {
+        setLoading(true);
+        // 1. Ambil sesi secara aktif saat pertama kali load / reload
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (error) throw error;
+
+        if (session?.user) {
+          const userRole = await fetchUserRoleSafe(session.user.id);
+          if (isMounted) {
+            setSession(session);
+            setUser(session.user);
+            setRole(userRole);
+          }
+        }
+      } catch (error) {
+        console.error("Error pada inisialisasi sesi:", error);
+      } finally {
+        // Apapun yang terjadi (sukses/gagal/kosong), WAJIB matikan loading
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    // Jalankan pengambilan sesi awal
+    initializeAuth();
+
+    // 2. Pasang pendengar untuk event selanjutnya (seperti saat user klik Login/Logout)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session?.user) {
-        // A session exists, now we MUST fetch the role before we stop loading.
+        // Agar tidak loading terus saat token refresh
         const userRole = await fetchUserRoleSafe(session.user.id);
-        setSession(session);
-        setUser(session.user);
-        setRole(userRole);
+        if (isMounted) {
+          setSession(session);
+          setUser(session.user);
+          setRole(userRole);
+          setLoading(false);
+        }
       } else {
-        // No session, clear all user-related state.
-        setSession(null);
-        setUser(null);
-        setRole(null);
+        if (isMounted) {
+          setSession(null);
+          setUser(null);
+          setRole(null);
+          setLoading(false);
+        }
       }
-      
-      // CRITICAL: Set loading to false only after all async operations (like role fetching) are complete.
-      setLoading(false);
     });
 
-    // Cleanup subscription on component unmount
+    // Bersihkan listener saat komponen dibongkar (mencegah memory leak)
     return () => {
+      isMounted = false;
       subscription.unsubscribe();
     };
   }, []);
