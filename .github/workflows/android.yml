@@ -13,7 +13,7 @@ jobs:
       - name: Setup Java 21
         uses: actions/setup-java@v4
         with:
-          distribution: 'zulu' # Menambahkan JDK 21 untuk mendukung Capacitor 8
+          distribution: 'zulu'
           java-version: '21'
 
       - name: Setup Node.js 22
@@ -24,24 +24,16 @@ jobs:
       - name: Install dependencies
         run: yarn install --frozen-lockfile
 
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js 22
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22' # Memaksa versi Node agar cocok dengan Vite 7
-
-      - name: Install dependencies
-        run: yarn install --frozen-lockfile
-
       - name: Build Web Project (Vite)
         run: yarn build
 
       - name: Add Android Platform
         run: |
           npx cap add android
+          # Paksa menggunakan Manifest yang kita buat agar izin GPS masuk
+          cp android/app/src/main/AndroidManifest.xml android/app/src/main/AndroidManifest.xml.bak 
           npx cap sync android
+          mv android/app/src/main/AndroidManifest.xml.bak android/app/src/main/AndroidManifest.xml
 
       - name: Build Android APK
         run: |
@@ -52,5 +44,5 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: app-debug
+          name: E-Parkir-Madiun-Debug
           path: android/app/build/outputs/apk/debug/app-debug.apk
