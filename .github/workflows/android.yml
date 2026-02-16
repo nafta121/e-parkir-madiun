@@ -1,0 +1,39 @@
+name: Build Android APK
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20.19.0' # Memaksa versi Node agar cocok dengan Vite 7
+
+      - name: Install dependencies
+        run: yarn install --frozen-lockfile
+
+      - name: Build Web Project (Vite)
+        run: yarn build
+
+      - name: Add Android Platform
+        run: |
+          npx cap add android
+          npx cap sync android
+
+      - name: Build Android APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug
+          path: android/app/build/outputs/apk/debug/app-debug.apk
