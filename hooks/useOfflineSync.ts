@@ -1,6 +1,4 @@
-
-
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useSubmitTransaction } from './useParkingData';
 import { TransactionPayload, ShiftType } from '../types';
 
@@ -19,18 +17,40 @@ interface OfflineTransaction {
   };
 }
 
-// Helpers outside hook to avoid re-creation
-const fileToBase64 = (file: File): Promise<string> => {
+// ✨ REFACTORED: Fungsi Kompresi Gambar Otomatis (Mencegah Memori Penuh)
+const compressAndConvertToBase64 = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.readAsDataURL(file);
-    reader.onload = () => resolve(reader.result as string);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement('canvas');
+        // Perkecil ukuran gambar maksimal lebar 800px (Cukup untuk bukti struk/parkir)
+        const MAX_WIDTH = 800;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > MAX_WIDTH) {
+          height = Math.round((height * MAX_WIDTH) / width);
+          width = MAX_WIDTH;
+        }
+
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext('2d');
+        ctx?.drawImage(img, 0, 0, width, height);
+
+        // Kompres menjadi JPEG dengan kualitas 70% (Menyusutkan ukuran Base64 hingga 90%!)
+        resolve(canvas.toDataURL('image/jpeg', 0.7));
+      };
+      img.onerror = (error) => reject(error);
+      img.src = event.target?.result as string;
+    };
     reader.onerror = (error) => reject(error);
   });
 };
 
-// STABILITY: Replaced buggy `fetch` logic with robust `atob` implementation for Data URI conversion.
-// This prevents "Failed to fetch" errors and ensures reliable offline->online image sync.
 const base64ToFile = (base64: string, fileName: string): File => {
   try {
     const arr = base64.split(',');
@@ -46,10 +66,11 @@ const base64ToFile = (base64: string, fileName: string): File => {
     while (n--) {
       u8arr[n] = bstr.charCodeAt(n);
     }
-    return new File([u8arr], fileName, { type: mime });
+    // Ganti ekstensi file menjadi .jpg karena kita sudah mengompresnya sebagai image/jpeg
+    const newFileName = fileName.replace(/\.[^/.]+$/, "") + ".jpg";
+    return new File([u8arr], newFileName, { type: mime });
   } catch (error) {
     console.error("Error converting Base64 to File:", error);
-    // Return a dummy empty file to prevent a crash, though the upload will likely fail.
     return new File([], fileName); 
   }
 };
@@ -58,11 +79,14 @@ export const useOfflineSync = () => {
   const [isOnline, setIsOnline] = useState<boolean>(navigator.onLine);
   const [pendingCount, setPendingCount] = useState<number>(0);
   const [isSyncing, setIsSyncing] = useState<boolean>(false);
+  
+  // Menggunakan useRef untuk mencegah Infinite Loop di useEffect
+  const isSyncingRef = useRef(false);
   const submitMutation = useSubmitTransaction();
 
-  // 2. SYNC PROCESS (Defined before useEffect to be used in it)
   const syncNow = useCallback(async () => {
-    if (!navigator.onLine || isSyncing) return;
+    // Gunakan referensi agar tidak ter-trigger berulang-ulang
+    if (!navigator.onLine || isSyncingRef.current) return;
     
     const queueStr = localStorage.getItem('offline_transactions');
     if (!queueStr) return;
@@ -78,7 +102,8 @@ export const useOfflineSync = () => {
     
     if (queue.length === 0) return;
 
-    setIsSyncing(true);
+    isSyncingRef.current = true;
+    setIsSyncing(true); // Hanya untuk update UI
     const failedItems: OfflineTransaction[] = [];
 
     for (const item of queue) {
@@ -93,7 +118,7 @@ export const useOfflineSync = () => {
           jukir_name: item.payload.jukir_name,
           shift: item.payload.shift,
           street_name: item.payload.street_name,
-          location_name: item.payload.location_name || '', // Pass location name
+          location_name: item.payload.location_name || '',
           amount: item.payload.amount,
           image_file: imageFile
         };
@@ -108,12 +133,11 @@ export const useOfflineSync = () => {
 
     localStorage.setItem('offline_transactions', JSON.stringify(failedItems));
     setPendingCount(failedItems.length);
+    
+    isSyncingRef.current = false;
     setIsSyncing(false);
 
-    if (failedItems.length > 0) {
-      console.warn(`Sync complete. ${failedItems.length} items failed and remain in queue.`);
-    }
-  }, [submitMutation, isSyncing]);
+  }, [submitMutation]); // isSyncing dihapus dari dependensi untuk memutus lingkaran setan
 
   useEffect(() => {
     const updateStatus = () => setIsOnline(navigator.onLine);
@@ -133,7 +157,6 @@ export const useOfflineSync = () => {
       setPendingCount(0);
     }
 
-    // Initial sync check on component mount
     if (navigator.onLine) {
       syncNow();
     }
@@ -144,7 +167,6 @@ export const useOfflineSync = () => {
     };
   }, [syncNow]);
 
-  // 1. SAVE TRANSACTION
   const saveTransaction = useCallback(async (data: TransactionPayload) => {
     if (navigator.onLine) {
       return submitMutation.mutateAsync(data);
@@ -152,7 +174,8 @@ export const useOfflineSync = () => {
       try {
         let imageBase64 = null;
         if (data.image_file) {
-          imageBase64 = await fileToBase64(data.image_file);
+          // Panggil fungsi kompresor sebelum disimpan
+          imageBase64 = await compressAndConvertToBase64(data.image_file);
         }
 
         const offlineItem: OfflineTransaction = {
@@ -164,7 +187,7 @@ export const useOfflineSync = () => {
             shift: data.shift,
             amount: data.amount,
             street_name: data.street_name,
-            location_name: data.location_name, // Save location name
+            location_name: data.location_name,
             imageBase64: imageBase64,
             imageName: data.image_file?.name || null
           }
@@ -179,7 +202,7 @@ export const useOfflineSync = () => {
           return Promise.resolve({ status: 'offline-saved' });
         } catch (e) {
           console.error("Offline save error:", e);
-          alert("Gagal menyimpan data offline. Memori HP penuh atau foto terlalu besar.");
+          alert("Gagal menyimpan data offline. Memori HP penuh.");
           throw new Error("Quota Exceeded");
         }
 
