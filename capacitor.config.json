@@ -1,0 +1,8 @@
+{
+  "appId": "com.nafta.eparkirmadiun",
+  "appName": "E-Parkir Madiun",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https"
+  }
+}
