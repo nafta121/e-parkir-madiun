@@ -34,14 +34,39 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
-  // REFACTORED: Ambil sesi awal secara manual, lalu dengarkan perubahannya
+  // REFACTORED: Ambil sesi awal dengan fitur Auto-Recovery (Self-Healing)
   useEffect(() => {
     let isMounted = true;
+
+    // Fungsi sapu jagat untuk menghapus token Supabase yang korup secara otomatis
+    const clearCorruptedStorage = () => {
+      try {
+        Object.keys(localStorage).forEach(key => {
+          if (key.startsWith('sb-') && key.endsWith('-auth-token')) {
+            localStorage.removeItem(key);
+            console.warn("♻️ [AUTO-RECOVERY] Data sesi lama yang rusak telah dibersihkan otomatis.");
+          }
+        });
+      } catch (e) {
+        console.error("Gagal membersihkan storage:", e);
+      }
+    };
+
+    // Fail-safe timer: Jika 3 detik tidak ada respon, hapus paksa token lama
+    const emergencyStop = setTimeout(() => {
+      if (isMounted) {
+        console.error("⏱️ [FAIL-SAFE] Supabase tidak merespons. Memaksa pembersihan sesi...");
+        clearCorruptedStorage();
+        setSession(null);
+        setUser(null);
+        setRole(null);
+        setLoading(false);
+      }
+    }, 3000);
 
     const initializeAuth = async () => {
       try {
         setLoading(true);
-        // 1. Ambil sesi secara aktif saat pertama kali load / reload
         const { data: { session }, error } = await supabase.auth.getSession();
         
         if (error) throw error;
@@ -55,22 +80,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         }
       } catch (error) {
-        console.error("Error pada inisialisasi sesi:", error);
-      } finally {
-        // Apapun yang terjadi (sukses/gagal/kosong), WAJIB matikan loading
+        // Jika Supabase melemparkan error (karena token kedaluwarsa/rusak), tangkap di sini!
+        console.error("🚨 Error inisialisasi sesi, melakukan auto-recovery:", error);
+        clearCorruptedStorage(); // Jalankan pembersihan otomatis
         if (isMounted) {
+          setSession(null);
+          setUser(null);
+          setRole(null);
+        }
+      } finally {
+        // Matikan loading dan timer darurat
+        if (isMounted) {
+          clearTimeout(emergencyStop);
           setLoading(false);
         }
       }
     };
 
-    // Jalankan pengambilan sesi awal
     initializeAuth();
 
-    // 2. Pasang pendengar untuk event selanjutnya (seperti saat user klik Login/Logout)
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
       if (session?.user) {
-        // Agar tidak loading terus saat token refresh
         const userRole = await fetchUserRoleSafe(session.user.id);
         if (isMounted) {
           setSession(session);
@@ -88,9 +118,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     });
 
-    // Bersihkan listener saat komponen dibongkar (mencegah memory leak)
     return () => {
       isMounted = false;
+      clearTimeout(emergencyStop);
       subscription.unsubscribe();
     };
   }, []);
