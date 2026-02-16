@@ -10,10 +10,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js 20
+      - name: Setup Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: '20.19.0' # Memaksa versi Node agar cocok dengan Vite 7
+          node-version: '22' # Memaksa versi Node agar cocok dengan Vite 7
 
       - name: Install dependencies
         run: yarn install --frozen-lockfile
