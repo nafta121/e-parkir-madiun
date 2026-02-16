@@ -125,16 +125,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
   }, []);
 
+    // REFACTORED: Hard Logout untuk mencegah bentrok sesi saat login kembali
   const signOut = useCallback(async () => {
     if (window.confirm('Apakah Anda yakin ingin keluar?')) {
       try {
-        const { error } = await supabase.auth.signOut();
-        if (error) throw error;
-        
-        // State will be cleared automatically by the onAuthStateChange listener
+        // 1. Coba beritahu server Supabase untuk menutup sesi (jangan lempar error jika gagal)
+        await supabase.auth.signOut();
       } catch (error) {
-        console.error("Error signing out:", error);
-        alert("Gagal keluar dari sistem. Silakan coba lagi.");
+        console.error("Server Supabase gagal merespons logout:", error);
+      } finally {
+        // 2. APAPUN YANG TERJADI (Sukses/Gagal), bumihanguskan token di memori HP!
+        Object.keys(localStorage).forEach(key => {
+          if (key.startsWith('sb-') && key.endsWith('-auth-token')) {
+            localStorage.removeItem(key);
+            console.warn("🧹 [HARD LOGOUT] Token lokal berhasil dihancurkan paksa.");
+          }
+        });
+
+        // 3. Reset semua state React seketika agar tidak menunggu onAuthStateChange
+        setSession(null);
+        setUser(null);
+        setRole(null);
+
+        // 4. Paksa browser untuk me-refresh halaman (Ini jurus paling ampuh di HP 
+        // untuk memastikan memori RAM browser benar-benar bersih seperti baru buka web)
+        window.location.reload();
       }
     }
   }, []);
