@@ -129,7 +129,7 @@ export const RegisterPage: React.FC = () => {
         
         <div className="px-8 pb-8 text-center border-t-2 border-gray-50 dark:border-gray-800 pt-4">
             <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest">
-                Dinas Perhubungan Kota Madiun
+                Kota Madiun
             </p>
         </div>
       </div>
